@@ -10,8 +10,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-openai.api_key = os.getenv(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)
-bling_api_key = os.getenv(bfa28c2bba8418312ea5a826c48cb4e3e03f8bbbdec46fec8d8c60a15d4386dfe5c4ec2f)
+openai_api_key = os.getenv("OPENAI_API_KEY")
+bling_api_key = os.getenv("BLING_API_KEY")
 
 @app.route("/perguntar", methods=["POST"])
 def perguntar():
