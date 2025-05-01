@@ -1,5 +1,8 @@
+from flask import Flask, request, jsonify
 import requests
 import os
+
+app = Flask(__name__)
 
 def buscar_produto_bling(nome_produto):
     token = os.getenv("BLING_API_KEY")
@@ -32,7 +35,6 @@ def buscar_produto_bling(nome_produto):
 
         resposta_formatada.append(f"{nome} - Preço: R$ {preco}")
 
-        # Verifica se há variações
         variacoes = produto.get("variacoes", [])
         for var in variacoes:
             nome_var = var.get("nome", "Variação")
@@ -40,3 +42,21 @@ def buscar_produto_bling(nome_produto):
             resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
 
     return "\n".join(resposta_formatada)
+
+@app.route("/produto", methods=["POST"])
+def produto():
+    data = request.get_json()
+    nome = data.get("nome")
+
+    if not nome:
+        return jsonify({"erro": "Informe o nome do produto"}), 400
+
+    resultado = buscar_produto_bling(nome)
+    return jsonify({"resultado": resultado})
+
+@app.route("/")
+def home():
+    return "API da Assistente está online!"
+
+if __name__ == "__main__":
+    app.run()
