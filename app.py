@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 def buscar_produto_bling(nome_produto):
     api_key = os.getenv("BLING_API_KEY")
-    url = "https://bling.com.br/Api/v2/produtos/json/"
+    url = "https://bling.com.br/Api/v3/produtos/json/"
     params = {
         "apikey": api_key,
         "descricao": nome_produto
