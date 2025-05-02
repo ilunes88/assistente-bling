@@ -51,7 +51,11 @@ def callback():
 
     global ACCESS_TOKEN
     ACCESS_TOKEN = response.json().get("access_token")
-    return "Autenticação concluída com sucesso!"
+
+    if ACCESS_TOKEN:
+        return f"Autenticação concluída com sucesso! Token obtido."
+    else:
+        return "Erro: access_token não retornado pelo Bling.", 400
 
 def buscar_produto_bling(nome_produto):
     if not ACCESS_TOKEN:
