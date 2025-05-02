@@ -71,7 +71,7 @@ def buscar_produto_bling(nome_produto):
 
     url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-    params = {"descricao": nome_produto}  # CORRIGIDO
+  #  params = {"descricao": nome_produto}  # CORRIGIDO
 
     response = requests.get(url, headers=headers, params=params)
 
