@@ -3,7 +3,6 @@ import requests
 import os
 import base64
 import uuid
-import difflib  # Importado para similaridade de texto
 
 app = Flask(__name__)
 
@@ -90,21 +89,16 @@ def buscar_produto_bling(nome_produto):
         if not produtos:
             return "Nenhum produto encontrado com esse nome."
 
-        # Filtrando por similaridade
-        nomes_disponiveis = [p.get('nome', '') for p in produtos]
-        nomes_similares = difflib.get_close_matches(nome_produto, nomes_disponiveis, n=10, cutoff=0.4)
-        produtos_filtrados = [p for p in produtos if p.get('nome', '') in nomes_similares]
-
-        if not produtos_filtrados:
-            return "Nenhum produto semelhante encontrado."
-
         resposta_formatada = []
 
-        for item in produtos_filtrados:
+        for item in produtos:
             descricao = item.get('nome', 'Sem descrição')
 
             preco_info = item.get('preco', {})
-            preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
+            if isinstance(preco_info, dict):
+                preco = preco_info.get('preco', '0.00')
+            else:
+                preco = preco_info  # já é número ou string
 
             resposta_formatada.append(f"{descricao}")
 
@@ -113,7 +107,10 @@ def buscar_produto_bling(nome_produto):
                 for v in variacoes:
                     nome_var = v.get('nome', 'Variação')
                     preco_info_var = v.get('preco', {})
-                    preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
+                    if isinstance(preco_info_var, dict):
+                        preco_var = preco_info_var.get('preco', preco)
+                    else:
+                        preco_var = preco_info_var
                     resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
             else:
                 resposta_formatada.append(f"- Preço: R$ {preco}")
