@@ -93,14 +93,24 @@ def buscar_produto_bling(nome_produto):
 
         for item in produtos:
             descricao = item.get('nome', 'Sem descrição')
-            preco = item.get('preco', {}).get('preco', '0.00')
-            variacoes = item.get('variacoes', [])
+
+            preco_info = item.get('preco', {})
+            if isinstance(preco_info, dict):
+                preco = preco_info.get('preco', '0.00')
+            else:
+                preco = preco_info  # já é número ou string
 
             resposta_formatada.append(f"{descricao}")
+
+            variacoes = item.get('variacoes', [])
             if variacoes:
                 for v in variacoes:
                     nome_var = v.get('nome', 'Variação')
-                    preco_var = v.get('preco', {}).get('preco', preco)
+                    preco_info_var = v.get('preco', {})
+                    if isinstance(preco_info_var, dict):
+                        preco_var = preco_info_var.get('preco', preco)
+                    else:
+                        preco_var = preco_info_var
                     resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
             else:
                 resposta_formatada.append(f"- Preço: R$ {preco}")
