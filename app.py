@@ -1,17 +1,18 @@
 from flask import Flask, request, jsonify, redirect
 import requests
 import os
+import base64
 
 app = Flask(__name__)
 
-# Configurações do aplicativo (substitua com seus dados)
+# Configurações do aplicativo (use variáveis de ambiente seguras no Render)
 CLIENT_ID = os.getenv("BLING_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLING_CLIENT_SECRET")
 REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
 TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
 AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 
-# Armazenar o access_token temporariamente (ideal usar um banco de dados seguro)
+# Armazenar o access_token temporariamente
 ACCESS_TOKEN = None
 
 @app.route("/")
@@ -20,13 +21,11 @@ def home():
 
 @app.route("/login")
 def login():
-    # URL para autenticação no Bling, onde o usuário irá conceder permissões
     auth_link = f"{AUTH_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
     return redirect(auth_link)
 
 @app.route("/callback")
 def callback():
-    # Recebe o código de autorização enviado pelo Bling após o login
     code = request.args.get("code")
     if not code:
         return "Código de autorização não encontrado", 400
@@ -34,12 +33,17 @@ def callback():
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": REDIRECT_URI,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET
+        "redirect_uri": REDIRECT_URI
     }
 
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    auth_string = f"{CLIENT_ID}:{CLIENT_SECRET}"
+    auth_base64 = base64.b64encode(auth_string.encode()).decode()
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": f"Basic {auth_base64}"
+    }
+
     response = requests.post(TOKEN_URL, data=data, headers=headers)
 
     if response.status_code != 200:
@@ -50,12 +54,10 @@ def callback():
     return "Autenticação concluída com sucesso!"
 
 def buscar_produto_bling(nome_produto):
-    # Verificar se o token de acesso está presente
     if not ACCESS_TOKEN:
         return "Erro: Token de acesso não encontrado. Faça login em /login"
 
-    # Realiza a requisição para a API do Bling com o token de acesso
-    url = f"https://www.bling.com.br/Api/v3/produtos/json/"
+    url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
     params = {"descricao": nome_produto}
 
@@ -65,29 +67,25 @@ def buscar_produto_bling(nome_produto):
         return f"Erro: {response.status_code} - {response.text}"
 
     try:
-        produtos = response.json()['retorno']['produtos']
+        produtos = response.json()['data']
     except KeyError:
         return "Produto não encontrado no Bling."
 
     resposta_formatada = []
 
     for item in produtos:
-        produto = item['produto']
-        descricao = produto.get('descricao', 'Sem descrição')
-        preco = produto.get('preco', '0.00')
-        variacoes = produto.get('variacoes', [])
+        descricao = item.get('nome', 'Sem descrição')
+        preco = item.get('preco', {}).get('preco', '0.00')
+        variacoes = item.get('variacoes', [])
 
-        # Adiciona o título principal
         resposta_formatada.append(f"{descricao}")
 
-        # Se houver variações, exibe cada uma
         if variacoes:
             for v in variacoes:
                 nome_var = v.get('nome', 'Variação')
-                preco_var = v.get('preco', preco)
+                preco_var = v.get('preco', {}).get('preco', preco)
                 resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
         else:
-            # Sem variação, mostra o preço principal
             resposta_formatada.append(f"- Preço: R$ {preco}")
 
     return "\n".join(resposta_formatada)
