@@ -9,7 +9,7 @@ CLIENT_ID = os.getenv("BLING_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLING_CLIENT_SECRET")
 REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
 TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
-AUTH_URL = "https://www.bling.com.br/autorizar-app"
+AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 
 # Armazenar o access_token temporariamente (ideal usar um banco de dados seguro)
 ACCESS_TOKEN = None
@@ -20,11 +20,13 @@ def home():
 
 @app.route("/login")
 def login():
-    auth_link = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code"
+    # URL para autenticação no Bling, onde o usuário irá conceder permissões
+    auth_link = f"{AUTH_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
     return redirect(auth_link)
 
 @app.route("/callback")
 def callback():
+    # Recebe o código de autorização enviado pelo Bling após o login
     code = request.args.get("code")
     if not code:
         return "Código de autorização não encontrado", 400
@@ -48,35 +50,44 @@ def callback():
     return "Autenticação concluída com sucesso!"
 
 def buscar_produto_bling(nome_produto):
+    # Verificar se o token de acesso está presente
     if not ACCESS_TOKEN:
         return "Erro: Token de acesso não encontrado. Faça login em /login"
 
-    url = f"https://www.bling.com.br/Api/v3/produtos?descricao={nome_produto}"
+    # Realiza a requisição para a API do Bling com o token de acesso
+    url = f"https://www.bling.com.br/Api/v3/produtos/json/"
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-    response = requests.get(url, headers=headers)
+    params = {"descricao": nome_produto}
+
+    response = requests.get(url, headers=headers, params=params)
 
     if response.status_code != 200:
         return f"Erro: {response.status_code} - {response.text}"
 
     try:
-        produtos = response.json()['data']
+        produtos = response.json()['retorno']['produtos']
     except KeyError:
         return "Produto não encontrado no Bling."
 
     resposta_formatada = []
-    for produto in produtos:
-        descricao = produto.get('nome', 'Sem descrição')
-        preco = produto.get('preco', {}).get('preco', '0.00')
+
+    for item in produtos:
+        produto = item['produto']
+        descricao = produto.get('descricao', 'Sem descrição')
+        preco = produto.get('preco', '0.00')
         variacoes = produto.get('variacoes', [])
 
+        # Adiciona o título principal
         resposta_formatada.append(f"{descricao}")
 
+        # Se houver variações, exibe cada uma
         if variacoes:
             for v in variacoes:
                 nome_var = v.get('nome', 'Variação')
-                preco_var = v.get('preco', {}).get('preco', preco)
+                preco_var = v.get('preco', preco)
                 resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
         else:
+            # Sem variação, mostra o preço principal
             resposta_formatada.append(f"- Preço: R$ {preco}")
 
     return "\n".join(resposta_formatada)
