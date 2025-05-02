@@ -6,15 +6,13 @@ import uuid
 
 app = Flask(__name__)
 
-# Configurações (use variáveis de ambiente seguras no Render)
 CLIENT_ID = os.getenv("BLING_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLING_CLIENT_SECRET")
 REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
 TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
 AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 
-# Token temporário (idealmente usar banco de dados)
-ACCESS_TOKEN = None
+TOKEN_FILE = "token.txt"
 
 @app.route("/")
 def home():
@@ -22,7 +20,7 @@ def home():
 
 @app.route("/login")
 def login():
-    state = str(uuid.uuid4())  # Valor aleatório para segurança
+    state = str(uuid.uuid4())
     auth_link = (
         f"{AUTH_URL}?response_type=code"
         f"&client_id={CLIENT_ID}"
@@ -56,22 +54,32 @@ def callback():
     if response.status_code != 200:
         return f"Erro ao obter token: {response.status_code} - {response.text}", 400
 
-    global ACCESS_TOKEN
-    ACCESS_TOKEN = response.json().get("access_token")
+    access_token = response.json().get("access_token")
 
-    if ACCESS_TOKEN:
+    if access_token:
+        # Salva o token no arquivo
+        with open(TOKEN_FILE, "w") as f:
+            f.write(access_token)
         return "Autenticação concluída com sucesso! Token obtido."
     else:
         return "Erro: access_token não retornado pelo Bling.", 400
 
 
+def carregar_token():
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
 def buscar_produto_bling(nome_produto):
-    if not ACCESS_TOKEN:
+    access_token = carregar_token()
+    if not access_token:
         return "Erro: Token de acesso não encontrado. Faça login em /login"
 
     url = "https://www.bling.com.br/Api/v3/produtos"
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-    params = {"nome": nome_produto}  # CORRIGIDO
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"nome": nome_produto}
 
     response = requests.get(url, headers=headers, params=params)
 
@@ -79,11 +87,11 @@ def buscar_produto_bling(nome_produto):
         return f"Erro: {response.status_code} - {response.text}"
 
     try:
-        produtos = response.json()['data']
+        produtos = response.json().get('data', [])
         if not produtos:
             return "Nenhum produto encontrado com esse nome."
-    except KeyError:
-        return "Produto não encontrado no Bling."
+    except Exception as e:
+        return f"Erro ao interpretar resposta: {str(e)}"
 
     resposta_formatada = []
 
