@@ -78,47 +78,52 @@ def buscar_produto_bling(nome_produto):
     headers = {"Authorization": f"Bearer {access_token}"}
     params = {"descricao": nome_produto}
 
-    response = requests.get(url, headers=headers, params=params)
-
-    if response.status_code != 200:
-        return f"Erro: {response.status_code} - {response.text}"
-
     try:
-        produtos = response.json().get('data', [])
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code != 200:
+            return f"Erro ao buscar produtos: {response.status_code} - {response.text}"
+
+        data = response.json()
+        produtos = data.get('data', [])
+
         if not produtos:
             return "Nenhum produto encontrado com esse nome."
+
+        resposta_formatada = []
+
+        for item in produtos:
+            descricao = item.get('nome', 'Sem descrição')
+            preco = item.get('preco', {}).get('preco', '0.00')
+            variacoes = item.get('variacoes', [])
+
+            resposta_formatada.append(f"{descricao}")
+            if variacoes:
+                for v in variacoes:
+                    nome_var = v.get('nome', 'Variação')
+                    preco_var = v.get('preco', {}).get('preco', preco)
+                    resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
+            else:
+                resposta_formatada.append(f"- Preço: R$ {preco}")
+
+        return "\n".join(resposta_formatada)
+
     except Exception as e:
         return f"Erro ao interpretar resposta: {str(e)}"
 
-    resposta_formatada = []
-
-    for item in produtos:
-        descricao = item.get('nome', 'Sem descrição')
-        preco = item.get('preco', {}).get('preco', '0.00')
-        variacoes = item.get('variacoes', [])
-
-        resposta_formatada.append(f"{descricao}")
-
-        if variacoes:
-            for v in variacoes:
-                nome_var = v.get('nome', 'Variação')
-                preco_var = v.get('preco', {}).get('preco', preco)
-                resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
-        else:
-            resposta_formatada.append(f"- Preço: R$ {preco}")
-
-    return "\n".join(resposta_formatada)
-
 @app.route("/produto", methods=["POST"])
 def produto():
-    data = request.get_json()
-    nome = data.get("nome")
+    try:
+        data = request.get_json()
+        nome = data.get("nome")
 
-    if not nome:
-        return jsonify({"erro": "Informe o nome do produto"}), 400
+        if not nome:
+            return jsonify({"erro": "Informe o nome do produto"}), 400
 
-    resultado = buscar_produto_bling(nome)
-    return jsonify({"resultado": resultado})
+        resultado = buscar_produto_bling(nome)
+        return jsonify({"resultado": resultado})
+
+    except Exception as e:
+        return jsonify({"erro": f"Erro inesperado: {str(e)}"}), 500
 
 @app.route("/verifica_token")
 def verifica_token():
