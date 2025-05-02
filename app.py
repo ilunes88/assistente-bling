@@ -11,7 +11,6 @@ CLIENT_SECRET = os.getenv("BLING_CLIENT_SECRET")
 REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
 TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
 AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
-
 TOKEN_FILE = "token.txt"
 
 @app.route("/")
@@ -57,13 +56,11 @@ def callback():
     access_token = response.json().get("access_token")
 
     if access_token:
-        # Salva o token no arquivo
         with open(TOKEN_FILE, "w") as f:
             f.write(access_token)
         return "Autenticação concluída com sucesso! Token obtido."
     else:
         return "Erro: access_token não retornado pelo Bling.", 400
-
 
 def carregar_token():
     try:
@@ -75,7 +72,7 @@ def carregar_token():
 def buscar_produto_bling(nome_produto):
     access_token = carregar_token()
     if not access_token:
-        return "Erro: Token de acesso não encontrado. Faça login em /login"
+        return "Erro: Token não encontrado. Faça login em /login"
 
     url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -112,7 +109,6 @@ def buscar_produto_bling(nome_produto):
 
     return "\n".join(resposta_formatada)
 
-
 @app.route("/produto", methods=["POST"])
 def produto():
     data = request.get_json()
@@ -123,6 +119,18 @@ def produto():
 
     resultado = buscar_produto_bling(nome)
     return jsonify({"resultado": resultado})
+
+@app.route("/verifica_token")
+def verifica_token():
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            token = f.read().strip()
+            if token:
+                return jsonify({"status": "Token carregado com sucesso", "token": token})
+            else:
+                return jsonify({"status": "Token vazio"})
+    except FileNotFoundError:
+        return jsonify({"status": "Arquivo token.txt não encontrado"})
 
 if __name__ == "__main__":
     app.run(debug=True)
