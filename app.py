@@ -3,6 +3,7 @@ import requests
 import os
 import base64
 import uuid
+from difflib import SequenceMatcher
 
 app = Flask(__name__)
 
@@ -92,13 +93,15 @@ def buscar_produto_bling(nome_produto):
         resposta_formatada = []
 
         for item in produtos:
-            descricao = item.get('nome', 'Sem descrição')
+            nome_item = item.get('nome', '')
+            similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
+            if similaridade < 0.6:
+                continue
+
+            descricao = nome_item
 
             preco_info = item.get('preco', {})
-            if isinstance(preco_info, dict):
-                preco = preco_info.get('preco', '0.00')
-            else:
-                preco = preco_info  # já é número ou string
+            preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
 
             resposta_formatada.append(f"{descricao}")
 
@@ -107,13 +110,13 @@ def buscar_produto_bling(nome_produto):
                 for v in variacoes:
                     nome_var = v.get('nome', 'Variação')
                     preco_info_var = v.get('preco', {})
-                    if isinstance(preco_info_var, dict):
-                        preco_var = preco_info_var.get('preco', preco)
-                    else:
-                        preco_var = preco_info_var
+                    preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
                     resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
             else:
                 resposta_formatada.append(f"- Preço: R$ {preco}")
+
+        if not resposta_formatada:
+            return "Nenhum produto semelhante encontrado com esse nome."
 
         return "\n".join(resposta_formatada)
 
