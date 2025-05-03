@@ -77,7 +77,7 @@ def buscar_produto_bling(nome_produto):
 
     url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {access_token}"}
-    params = {"descricao": nome_produto}
+    params = {"limit": 100}  # Pega até 100 produtos
 
     try:
         response = requests.get(url, headers=headers, params=params)
@@ -86,39 +86,32 @@ def buscar_produto_bling(nome_produto):
 
         data = response.json()
         produtos = data.get('data', [])
-
-        if not produtos:
-            return "Nenhum produto encontrado com esse nome."
-
-        resposta_formatada = []
+        resultados = []
 
         for item in produtos:
-            nome_item = item.get('nome', '')
-            similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
-            if similaridade < 0.6:
-                continue
+            nome_principal = item.get('nome', '').lower()
+            encontrou = False
 
-            descricao = nome_item
-
-            preco_info = item.get('preco', {})
-            preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
-
-            resposta_formatada.append(f"{descricao}")
+            if nome_produto.lower() in nome_principal:
+                encontrou = True
+                descricao = item.get('nome', 'Sem descrição')
+                preco_info = item.get('preco', {})
+                preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
+                resultados.append(f"{descricao}\n- Preço: R$ {preco}")
 
             variacoes = item.get('variacoes', [])
-            if variacoes:
-                for v in variacoes:
-                    nome_var = v.get('nome', 'Variação')
+            for v in variacoes:
+                nome_var = v.get('nome', '').lower()
+                if nome_produto.lower() in nome_var:
+                    encontrou = True
                     preco_info_var = v.get('preco', {})
-                    preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
-                    resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
-            else:
-                resposta_formatada.append(f"- Preço: R$ {preco}")
+                    preco_var = preco_info_var.get('preco', '0.00') if isinstance(preco_info_var, dict) else preco_info_var
+                    resultados.append(f"{v.get('nome', 'Variação')}\n- Preço: R$ {preco_var}")
 
-        if not resposta_formatada:
-            return "Nenhum produto semelhante encontrado com esse nome."
+        if not resultados:
+            return "Nenhum produto ou variação encontrada com esse nome."
 
-        return "\n".join(resposta_formatada)
+        return "\n".join(resultados)
 
     except Exception as e:
         return f"Erro ao interpretar resposta: {str(e)}"
