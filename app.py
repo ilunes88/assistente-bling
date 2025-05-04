@@ -4,7 +4,7 @@ import os
 import base64
 import uuid
 from difflib import SequenceMatcher
-import openai  # Importando OpenAI para integração futura
+import openai
 
 app = Flask(__name__)
 
@@ -108,7 +108,6 @@ def buscar_produto_bling(nome_produto):
 
             resposta_formatada.append(f"{descricao}")
 
-            # Verifica variações do produto
             variacoes = item.get('variacoes', [])
             if variacoes:
                 for v in variacoes:
@@ -129,15 +128,15 @@ def buscar_produto_bling(nome_produto):
 
 def chamar_openai(query):
     try:
-        # Fazendo uma chamada à API da OpenAI para processar a consulta
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Usando modelo GPT-3.5, altere conforme necessário
-            messages=[  # Estrutura de mensagens com 'role' e 'content'
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
                 {"role": "system", "content": "Você é um assistente de atendimento ao cliente."},
                 {"role": "user", "content": query}
-            ]
+            ],
+            max_tokens=200
         )
-        return response['choices'][0]['message']['content'].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Erro ao processar a consulta com OpenAI: {str(e)}"
 
@@ -152,7 +151,6 @@ def produto():
 
         resultado_bling = buscar_produto_bling(nome)
         
-        # Se o produto for encontrado, processa a resposta com a OpenAI
         if "Nenhum produto encontrado" not in resultado_bling:
             resultado_openai = chamar_openai(f"Qual a descrição do produto {nome}?")
             return jsonify({"resultado": resultado_bling, "descricao_openai": resultado_openai})
