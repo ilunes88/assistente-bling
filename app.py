@@ -8,6 +8,7 @@ import openai
 
 app = Flask(__name__)
 
+# Bling
 CLIENT_ID = os.getenv("BLING_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLING_CLIENT_SECRET")
 REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
@@ -15,7 +16,7 @@ TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
 AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 TOKEN_FILE = "token.txt"
 
-# Configuração da OpenAI
+# OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route("/")
@@ -124,7 +125,7 @@ def buscar_produto_bling(nome_produto):
         return "\n".join(resposta_formatada)
 
     except Exception as e:
-        return f"Erro ao interpretar resposta: {str(e)}"
+        return f"Erro ao interpretar resposta do Bling: {str(e)}"
 
 def chamar_openai(query):
     try:
@@ -138,6 +139,7 @@ def chamar_openai(query):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
+        print(f"Erro OpenAI: {str(e)}")
         return f"Erro ao processar a consulta com OpenAI: {str(e)}"
 
 @app.route("/produto", methods=["POST"])
@@ -150,27 +152,26 @@ def produto():
             return jsonify({"erro": "Informe o nome do produto"}), 400
 
         resultado_bling = buscar_produto_bling(nome)
-        
+
         if "Nenhum produto encontrado" not in resultado_bling:
             resultado_openai = chamar_openai(f"Qual a descrição do produto {nome}?")
-            return jsonify({"resultado": resultado_bling, "descricao_openai": resultado_openai})
+            return jsonify({
+                "resultado": resultado_bling,
+                "descricao_openai": resultado_openai
+            })
 
-        return jsonify({"resultado": resultado_bling})
+        return jsonify({"resultado": resultado_bling, "descricao_openai": "Produto não localizado para descrição."})
 
     except Exception as e:
         return jsonify({"erro": f"Erro inesperado: {str(e)}"}), 500
 
 @app.route("/verifica_token")
 def verifica_token():
-    try:
-        with open(TOKEN_FILE, "r") as f:
-            token = f.read().strip()
-            if token:
-                return jsonify({"status": "Token carregado com sucesso", "token": token})
-            else:
-                return jsonify({"status": "Token vazio"})
-    except FileNotFoundError:
-        return jsonify({"status": "Arquivo token.txt não encontrado"})
+    token = carregar_token()
+    if token:
+        return jsonify({"status": "Token carregado com sucesso", "token": token})
+    else:
+        return jsonify({"status": "Token não encontrado"})
 
 if __name__ == "__main__":
     app.run(debug=True)
