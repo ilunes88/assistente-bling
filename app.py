@@ -130,12 +130,14 @@ def buscar_produto_bling(nome_produto):
 def chamar_openai(query):
     try:
         # Fazendo uma chamada à API da OpenAI para processar a consulta
-        response = openai.Completion.create(
-            model="gpt-3.5-turbo",  # Usando modelo GPT-3.5, altere se usar outro
-            prompt=query,  # Usando 'prompt' ao invés de 'messages' para compatibilidade com versão nova
-            max_tokens=100
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Usando modelo GPT-3.5, altere conforme necessário
+            messages=[  # Estrutura de mensagens com 'role' e 'content'
+                {"role": "system", "content": "Você é um assistente de atendimento ao cliente."},
+                {"role": "user", "content": query}
+            ]
         )
-        return response['choices'][0]['text'].strip()
+        return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         return f"Erro ao processar a consulta com OpenAI: {str(e)}"
 
