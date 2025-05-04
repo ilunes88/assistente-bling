@@ -4,7 +4,7 @@ import os
 import base64
 import uuid
 from difflib import SequenceMatcher
-import openai
+from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -17,7 +17,7 @@ AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 TOKEN_FILE = "token.txt"
 
 # OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/")
 def home():
@@ -129,16 +129,15 @@ def buscar_produto_bling(nome_produto):
 
 def chamar_openai(contexto_produto):
     try:
-        response = openai.ChatCompletion.create(  # Mudança aqui, utilizando ChatCompletion.create
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{
-                "role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."
-            },{
-                "role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"
-            }],
+            messages=[
+                {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
+                {"role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"}
+            ],
             max_tokens=200
         )
-        return response['choices'][0]['message']['content'].strip()  # Corrigido para acessar corretamente o conteúdo da resposta
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"[ERRO OPENAI] {str(e)}")
         return "Erro ao processar a descrição com OpenAI: " + str(e)
@@ -177,7 +176,6 @@ def verifica_token():
     else:
         return jsonify({"status": "Token não encontrado"})
 
-# Novo endpoint de verificação de ambiente e conexão com OpenAI
 @app.route("/verifica_ambiente")
 def verifica_ambiente():
     api_key = os.getenv("OPENAI_API_KEY")
@@ -185,15 +183,14 @@ def verifica_ambiente():
         return jsonify({"erro": "OPENAI_API_KEY não está definida."}), 500
 
     try:
-        # Tenta chamada simples à OpenAI
-        resposta = openai.ChatCompletion.create(  # Mudança aqui, utilizando ChatCompletion.create
+        resposta = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "Teste de conexão"}],
             max_tokens=5
         )
         return jsonify({
             "status": "OK",
-            "resposta": resposta['choices'][0]['message']['content'].strip()  # Corrigido para acessar a resposta corretamente
+            "resposta": resposta.choices[0].message.content.strip()
         })
     except Exception as e:
         return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
