@@ -4,6 +4,7 @@ import os
 import base64
 import uuid
 from difflib import SequenceMatcher
+import openai  # Importando OpenAI para integração futura
 
 app = Flask(__name__)
 
@@ -13,6 +14,9 @@ REDIRECT_URI = "https://assistente-bling.onrender.com/callback"
 TOKEN_URL = "https://www.bling.com.br/Api/v3/oauth/token"
 AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 TOKEN_FILE = "token.txt"
+
+# Configuração da OpenAI
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route("/")
 def home():
@@ -77,7 +81,7 @@ def buscar_produto_bling(nome_produto):
 
     url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {access_token}"}
-    params = {"limit": 100}  # Pega até 100 produtos
+    params = {"descricao": nome_produto}
 
     try:
         response = requests.get(url, headers=headers, params=params)
@@ -86,35 +90,54 @@ def buscar_produto_bling(nome_produto):
 
         data = response.json()
         produtos = data.get('data', [])
-        resultados = []
+
+        if not produtos:
+            return "Nenhum produto encontrado com esse nome."
+
+        resposta_formatada = []
 
         for item in produtos:
-            nome_principal = item.get('nome', '').lower()
-            encontrou = False
+            nome_item = item.get('nome', '')
+            similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
+            if similaridade < 0.6:
+                continue
 
-            if nome_produto.lower() in nome_principal:
-                encontrou = True
-                descricao = item.get('nome', 'Sem descrição')
-                preco_info = item.get('preco', {})
-                preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
-                resultados.append(f"{descricao}\n- Preço: R$ {preco}")
+            descricao = nome_item
+            preco_info = item.get('preco', {})
+            preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
 
+            resposta_formatada.append(f"{descricao}")
+
+            # Verifica variações do produto
             variacoes = item.get('variacoes', [])
-            for v in variacoes:
-                nome_var = v.get('nome', '').lower()
-                if nome_produto.lower() in nome_var:
-                    encontrou = True
+            if variacoes:
+                for v in variacoes:
+                    nome_var = v.get('nome', 'Variação')
                     preco_info_var = v.get('preco', {})
-                    preco_var = preco_info_var.get('preco', '0.00') if isinstance(preco_info_var, dict) else preco_info_var
-                    resultados.append(f"{v.get('nome', 'Variação')}\n- Preço: R$ {preco_var}")
+                    preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
+                    resposta_formatada.append(f"- {nome_var} | R$ {preco_var}")
+            else:
+                resposta_formatada.append(f"- Preço: R$ {preco}")
 
-        if not resultados:
-            return "Nenhum produto ou variação encontrada com esse nome."
+        if not resposta_formatada:
+            return "Nenhum produto semelhante encontrado com esse nome."
 
-        return "\n".join(resultados)
+        return "\n".join(resposta_formatada)
 
     except Exception as e:
         return f"Erro ao interpretar resposta: {str(e)}"
+
+def chamar_openai(query):
+    try:
+        # Fazendo uma chamada à API da OpenAI para processar a consulta
+        response = openai.Completion.create(
+            model="text-davinci-003",  # Usando modelo GPT-3, altere se usar outro
+            prompt=query,
+            max_tokens=100
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return f"Erro ao processar a consulta com OpenAI: {str(e)}"
 
 @app.route("/produto", methods=["POST"])
 def produto():
@@ -125,8 +148,14 @@ def produto():
         if not nome:
             return jsonify({"erro": "Informe o nome do produto"}), 400
 
-        resultado = buscar_produto_bling(nome)
-        return jsonify({"resultado": resultado})
+        resultado_bling = buscar_produto_bling(nome)
+        
+        # Se o produto for encontrado, processa a resposta com a OpenAI
+        if "Nenhum produto encontrado" not in resultado_bling:
+            resultado_openai = chamar_openai(f"Qual a descrição do produto {nome}?")
+            return jsonify({"resultado": resultado_bling, "descricao_openai": resultado_openai})
+
+        return jsonify({"resultado": resultado_bling})
 
     except Exception as e:
         return jsonify({"erro": f"Erro inesperado: {str(e)}"}), 500
