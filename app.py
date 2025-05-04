@@ -18,8 +18,6 @@ TOKEN_FILE = "token.txt"
 
 # OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    raise EnvironmentError("OPENAI_API_KEY não está configurada.")
 
 @app.route("/")
 def home():
@@ -56,10 +54,7 @@ def callback():
         "Authorization": f"Basic {auth_base64}"
     }
 
-    try:
-        response = requests.post(TOKEN_URL, data=data, headers=headers, timeout=10)
-    except requests.exceptions.RequestException as e:
-        return f"Erro de conexão ao obter token: {str(e)}", 500
+    response = requests.post(TOKEN_URL, data=data, headers=headers)
 
     if response.status_code != 200:
         return f"Erro ao obter token: {response.status_code} - {response.text}", 400
@@ -83,29 +78,29 @@ def carregar_token():
 def buscar_produto_bling(nome_produto):
     access_token = carregar_token()
     if not access_token:
-        return {"erro": "Token não encontrado. Faça login em /login"}
+        return "Erro: Token não encontrado. Faça login em /login"
 
     url = "https://www.bling.com.br/Api/v3/produtos"
     headers = {"Authorization": f"Bearer {access_token}"}
     params = {"descricao": nome_produto}
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params)
         if response.status_code != 200:
-            return {"erro": f"Erro ao buscar produtos: {response.status_code} - {response.text}"}
+            return f"Erro ao buscar produtos: {response.status_code} - {response.text}"
 
         data = response.json()
         produtos = data.get('data', [])
 
         if not produtos:
-            return {"erro": "Nenhum produto encontrado com esse nome."}
+            return "Nenhum produto encontrado com esse nome."
 
         resposta_formatada = []
 
         for item in produtos:
             nome_item = item.get('nome', '')
             similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
-            if similaridade < 0.4:
+            if similaridade < 0.6:
                 continue
 
             descricao = nome_item
@@ -125,28 +120,27 @@ def buscar_produto_bling(nome_produto):
                 resposta_formatada.append(f"- Preço: R$ {preco}")
 
         if not resposta_formatada:
-            return {"erro": "Nenhum produto semelhante encontrado com esse nome."}
+            return "Nenhum produto semelhante encontrado com esse nome."
 
-        return {"resultado": "\n".join(resposta_formatada)}
+        return "\n".join(resposta_formatada)
 
     except Exception as e:
-        return {"erro": f"Erro ao interpretar resposta do Bling: {str(e)}"}
+        return f"Erro ao interpretar resposta do Bling: {str(e)}"
 
-def chamar_openai(query):
+def chamar_openai(contexto_produto):
     try:
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Você é um assistente de atendimento ao cliente."},
-                {"role": "user", "content": query}
+                {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
+                {"role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"}
             ],
-            max_tokens=200,
-            timeout=10
+            max_tokens=200
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[OpenAI ERRO] {str(e)}")
-        return "Não foi possível processar a descrição no momento. Tente novamente mais tarde."
+        print(f"[ERRO OPENAI] {str(e)}")
+        return "Erro ao processar a descrição com OpenAI: " + str(e)
 
 @app.route("/produto", methods=["POST"])
 def produto():
@@ -159,14 +153,17 @@ def produto():
 
         resultado_bling = buscar_produto_bling(nome)
 
-        if "erro" not in resultado_bling:
-            resultado_openai = chamar_openai(f"Qual a descrição do produto {nome}?")
+        if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
+            resultado_openai = chamar_openai(resultado_bling)
             return jsonify({
-                "resultado": resultado_bling["resultado"],
+                "resultado": resultado_bling,
                 "descricao_openai": resultado_openai
             })
 
-        return jsonify({"resultado": resultado_bling.get("erro"), "descricao_openai": "Produto não localizado para descrição."})
+        return jsonify({
+            "resultado": resultado_bling,
+            "descricao_openai": "Produto não localizado para descrição."
+        })
 
     except Exception as e:
         return jsonify({"erro": f"Erro inesperado: {str(e)}"}), 500
