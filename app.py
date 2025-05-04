@@ -129,7 +129,7 @@ def buscar_produto_bling(nome_produto):
 
 def chamar_openai(contexto_produto):
     try:
-        response = openai.chat_completions.create(  # Usando chat_completions para OpenAI >= 1.0.0
+        response = openai.ChatCompletion.create(  # Mudança aqui, utilizando ChatCompletion.create
             model="gpt-3.5-turbo",
             messages=[{
                 "role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."
@@ -138,7 +138,7 @@ def chamar_openai(contexto_produto):
             }],
             max_tokens=200
         )
-        return response.choices[0].message['content'].strip()  # Corrigido para acessar corretamente o conteúdo da resposta
+        return response['choices'][0]['message']['content'].strip()  # Corrigido para acessar corretamente o conteúdo da resposta
     except Exception as e:
         print(f"[ERRO OPENAI] {str(e)}")
         return "Erro ao processar a descrição com OpenAI: " + str(e)
@@ -186,14 +186,14 @@ def verifica_ambiente():
 
     try:
         # Tenta chamada simples à OpenAI
-        resposta = openai.chat_completions.create(  # Usando chat_completions para OpenAI >= 1.0.0
+        resposta = openai.ChatCompletion.create(  # Mudança aqui, utilizando ChatCompletion.create
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "Teste de conexão"}],
             max_tokens=5
         )
         return jsonify({
             "status": "OK",
-            "resposta": resposta.choices[0].message['content'].strip()  # Corrigido para acessar a resposta corretamente
+            "resposta": resposta['choices'][0]['message']['content'].strip()  # Corrigido para acessar a resposta corretamente
         })
     except Exception as e:
         return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
