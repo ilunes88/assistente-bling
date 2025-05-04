@@ -195,6 +195,29 @@ def verifica_ambiente():
     except Exception as e:
         return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
 
+@app.route("/whatsapp", methods=["POST"])
+def whatsapp():
+    try:
+        data = request.get_json()
+        mensagem = data.get("mensagem", "").strip()
+
+        if not mensagem:
+            return jsonify({"resposta": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
+
+        resultado_bling = buscar_produto_bling(mensagem)
+
+        if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
+            descricao = chamar_openai(resultado_bling)
+            resposta_final = f"{descricao}\n\n{resultado_bling}"
+        else:
+            resposta_final = "Produto não encontrado no sistema. Tente usar outro nome ou variação."
+
+        return jsonify({"resposta": resposta_final})
+
+    except Exception as e:
+        print(f"[ERRO WHATSAPP] {str(e)}")
+        return jsonify({"resposta": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
+
 if __name__ == "__main__":
     import sys
     if "RENDER" in os.environ:
