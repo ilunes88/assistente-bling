@@ -187,9 +187,7 @@ def verifica_ambiente():
         # Tenta chamada simples à OpenAI
         resposta = openai.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": "Teste de conexão"}
-            ],
+            messages=[{"role": "user", "content": "Teste de conexão"}],
             max_tokens=5
         )
         return jsonify({
