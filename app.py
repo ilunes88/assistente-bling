@@ -176,15 +176,28 @@ def verifica_token():
     else:
         return jsonify({"status": "Token não encontrado"})
 
-# ✅ Novo endpoint de teste da OpenAI
-@app.route("/teste_openai")
-def teste_openai():
+# Novo endpoint de verificação de ambiente e conexão com OpenAI
+@app.route("/verifica_ambiente")
+def verifica_ambiente():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"erro": "OPENAI_API_KEY não está definida."}), 500
+
     try:
-        models = openai.models.list()
-        nomes_modelos = [model.id for model in models.data]
-        return jsonify({"status": "Conexão bem-sucedida com OpenAI", "modelos_disponiveis": nomes_modelos})
+        # Tenta chamada simples à OpenAI
+        resposta = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": "Teste de conexão"}
+            ],
+            max_tokens=5
+        )
+        return jsonify({
+            "status": "OK",
+            "resposta": resposta.choices[0].message.content.strip()
+        })
     except Exception as e:
-        return jsonify({"erro": f"Erro de conexão com OpenAI: {str(e)}"})
+        return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
