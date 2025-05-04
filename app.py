@@ -4,7 +4,7 @@ import os
 import base64
 import uuid
 from difflib import SequenceMatcher
-import openai
+from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -17,7 +17,7 @@ AUTH_URL = "https://www.bling.com.br/Api/v3/oauth/authorize"
 TOKEN_FILE = "token.txt"
 
 # OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/")
 def home():
@@ -129,7 +129,7 @@ def buscar_produto_bling(nome_produto):
 
 def chamar_openai(contexto_produto):
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
@@ -137,7 +137,8 @@ def chamar_openai(contexto_produto):
             ],
             max_tokens=200
         )
-        return response.choices[0].message.content.strip()
+        descricao = response.choices[0].message.content.strip()
+        return descricao if descricao else "Descrição não gerada."
     except Exception as e:
         print(f"[ERRO OPENAI] {str(e)}")
         return "Erro ao processar a descrição com OpenAI: " + str(e)
