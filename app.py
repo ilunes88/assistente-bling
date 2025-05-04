@@ -196,4 +196,9 @@ def verifica_ambiente():
         return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import sys
+    if "RENDER" in os.environ:
+        from waitress import serve
+        serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    else:
+        app.run(debug=True)
