@@ -5,7 +5,6 @@ import base64
 import uuid
 from difflib import SequenceMatcher
 from openai import OpenAI
-import json
 
 app = Flask(__name__)
 
@@ -128,72 +127,96 @@ def buscar_produto_bling(nome_produto):
     except Exception as e:
         return f"Erro ao interpretar resposta do Bling: {str(e)}"
 
-def chamar_openai_com_funcao(mensagem_cliente):
-    functions = [
-        {
-            "name": "buscar_produto_bling",
-            "description": "Busca informações e preço de um produto no Bling",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nome_produto": {
-                        "type": "string",
-                        "description": "Nome do produto a ser buscado, por exemplo 'bota pvc'"
-                    }
-                },
-                "required": ["nome_produto"]
-            }
-        }
-    ]
+def chamar_openai(contexto_produto):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
+                {"role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"}
+            ],
+            max_tokens=200
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[ERRO OPENAI] {str(e)}")
+        return "Erro ao processar a descrição com OpenAI: " + str(e)
 
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo-0613",
-        messages=[
-            {"role": "system", "content": "Você é um assistente que ajuda clientes a encontrar produtos e preços usando o Bling."},
-            {"role": "user", "content": mensagem_cliente}
-        ],
-        functions=functions,
-        function_call="auto"
-    )
-
-    if response.choices[0].finish_reason == "function_call":
-        func_call = response.choices[0].message.function_call
-        if func_call.name == "buscar_produto_bling":
-            argumentos = json.loads(func_call.arguments)
-            resultado = buscar_produto_bling(argumentos["nome_produto"])
-
-            final_response = client.chat.completions.create(
-                model="gpt-3.5-turbo-0613",
-                messages=[
-                    {"role": "system", "content": "Você é um assistente que ajuda clientes a encontrar produtos."},
-                    {"role": "user", "content": mensagem_cliente},
-                    response.choices[0].message,
-                    {
-                        "role": "function",
-                        "name": "buscar_produto_bling",
-                        "content": resultado
-                    }
-                ]
-            )
-            return final_response.choices[0].message.content
-    else:
-        return response.choices[0].message.content
-
-@app.route("/assistente_produto", methods=["POST"])
-def assistente_produto():
+@app.route("/produto", methods=["POST"])
+def produto():
     try:
         data = request.get_json()
-        mensagem = data.get("mensagem", "").strip()
-        if not mensagem:
-            return jsonify({"resposta": "Mensagem não informada."}), 400
+        nome = data.get("nome")
 
-        resposta = chamar_openai_com_funcao(mensagem)
-        return jsonify({"resposta": resposta})
+        if not nome:
+            return jsonify({"erro": "Informe o nome do produto"}), 400
+
+        resultado_bling = buscar_produto_bling(nome)
+
+        if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
+            resultado_openai = chamar_openai(resultado_bling)
+            return jsonify({
+                "resultado": resultado_bling,
+                "descricao_openai": resultado_openai
+            })
+
+        return jsonify({
+            "resultado": resultado_bling,
+            "descricao_openai": "Produto não localizado para descrição."
+        })
 
     except Exception as e:
         return jsonify({"erro": f"Erro inesperado: {str(e)}"}), 500
 
-# MANTÉM DEMAIS ROTAS EXISTENTES (produto, whatsapp, etc.)
+@app.route("/verifica_token")
+def verifica_token():
+    token = carregar_token()
+    if token:
+        return jsonify({"status": "Token carregado com sucesso", "token": token})
+    else:
+        return jsonify({"status": "Token não encontrado"})
+
+@app.route("/verifica_ambiente")
+def verifica_ambiente():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"erro": "OPENAI_API_KEY não está definida."}), 500
+
+    try:
+        resposta = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Teste de conexão"}],
+            max_tokens=5
+        )
+        return jsonify({
+            "status": "OK",
+            "resposta": resposta.choices[0].message.content.strip()
+        })
+    except Exception as e:
+        return jsonify({"erro": f"Erro ao conectar à OpenAI: {str(e)}"}), 500
+
+@app.route("/whatsapp", methods=["POST"])
+def whatsapp():
+    try:
+        data = request.get_json()
+        mensagem = data.get("mensagem", "").strip()
+
+        if not mensagem:
+            return jsonify({"resposta": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
+
+        resultado_bling = buscar_produto_bling(mensagem)
+
+        if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
+            descricao = chamar_openai(resultado_bling)
+            resposta_final = f"{descricao}\n\n{resultado_bling}"
+        else:
+            resposta_final = "Produto não encontrado no sistema. Tente usar outro nome ou variação."
+
+        return jsonify({"resposta": resposta_final})
+
+    except Exception as e:
+        print(f"[ERRO WHATSAPP] {str(e)}")
+        return jsonify({"resposta": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
 
 if __name__ == "__main__":
     import sys
