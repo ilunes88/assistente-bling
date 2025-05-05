@@ -130,7 +130,7 @@ def buscar_produto_bling(nome_produto):
 def chamar_openai(contexto_produto):
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
                 {"role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"}
@@ -184,7 +184,7 @@ def verifica_ambiente():
 
     try:
         resposta = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4-turbo",
             messages=[{"role": "user", "content": "Teste de conexão"}],
             max_tokens=5
         )
