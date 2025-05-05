@@ -100,7 +100,7 @@ def buscar_produto_bling(nome_produto):
         for item in produtos:
             nome_item = item.get('nome', '')
             similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
-            if similaridade < 0.6:
+            if similaridade < 0.4:
                 continue
 
             descricao = nome_item
