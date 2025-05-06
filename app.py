@@ -59,7 +59,9 @@ def callback():
     if response.status_code != 200:
         return f"Erro ao obter token: {response.status_code} - {response.text}", 400
 
-    access_token = response.json().get("access_token")
+    tokens = response.json()
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
 
     if access_token:
         with open(TOKEN_FILE, "w") as f:
@@ -127,20 +129,44 @@ def buscar_produto_bling(nome_produto):
     except Exception as e:
         return f"Erro ao interpretar resposta do Bling: {str(e)}"
 
-def chamar_openai(contexto_produto):
+def chamar_openai_com_funcao(nome_produto):
     try:
+        def buscar_produto(nome_produto):
+            return buscar_produto_bling(nome_produto)
+
         response = client.chat.completions.create(
             model="gpt-4-turbo",
             messages=[
-                {"role": "system", "content": "Você é um assistente de atendimento ao cliente. Gere uma descrição útil e clara do produto com base nas informações fornecidas."},
-                {"role": "user", "content": f"Descreva este produto com base nos dados: {contexto_produto}"}
+                {"role": "system", "content": "Você é um assistente que ajuda os usuários a encontrarem produtos e preços."},
+                {"role": "user", "content": f"Quanto custa o produto {nome_produto}?"}
             ],
-            max_tokens=200
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "buscar_produto_bling",
+                        "description": "Busca o preço e informações de um produto no Bling ERP",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "nome_produto": {
+                                    "type": "string",
+                                    "description": "Nome do produto a ser buscado"
+                                }
+                            },
+                            "required": ["nome_produto"]
+                        }
+                    }
+                }
+            ],
+            tool_choice={"type": "function", "function": {"name": "buscar_produto_bling"}},
+            function_call={"name": "buscar_produto_bling", "arguments": {"nome_produto": nome_produto}}
         )
+
         return response.choices[0].message.content.strip()
+
     except Exception as e:
-        print(f"[ERRO OPENAI] {str(e)}")
-        return "Erro ao processar a descrição com OpenAI: " + str(e)
+        return f"Erro na integração OpenAI + Bling: {str(e)}"
 
 @app.route("/produto", methods=["POST"])
 def produto():
@@ -154,7 +180,7 @@ def produto():
         resultado_bling = buscar_produto_bling(nome)
 
         if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
-            resultado_openai = chamar_openai(resultado_bling)
+            resultado_openai = chamar_openai_com_funcao(nome)
             return jsonify({
                 "resultado": resultado_bling,
                 "descricao_openai": resultado_openai
@@ -199,29 +225,24 @@ def verifica_ambiente():
 def whatsapp():
     try:
         data = request.get_json()
-
-        mensagem = (
-            data.get("message", {}).get("text")
-            or data.get("mensagem")
-            or ""
-        ).strip()
+        mensagem = data.get("mensagem", "").strip()
 
         if not mensagem:
-            return jsonify({"reply": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
+            return jsonify({"resposta": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
 
         resultado_bling = buscar_produto_bling(mensagem)
 
         if "Nenhum produto encontrado" not in resultado_bling and "Erro" not in resultado_bling:
-            descricao = chamar_openai(resultado_bling)
+            descricao = chamar_openai_com_funcao(mensagem)
             resposta_final = f"{descricao}\n\n{resultado_bling}"
         else:
             resposta_final = "Produto não encontrado no sistema. Tente usar outro nome ou variação."
 
-        return jsonify({"reply": resposta_final})
+        return jsonify({"resposta": resposta_final})
 
     except Exception as e:
         print(f"[ERRO WHATSAPP] {str(e)}")
-        return jsonify({"reply": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
+        return jsonify({"resposta": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
 
 if __name__ == "__main__":
     import sys
