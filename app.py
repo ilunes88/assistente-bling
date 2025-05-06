@@ -199,10 +199,15 @@ def verifica_ambiente():
 def whatsapp():
     try:
         data = request.get_json()
-        mensagem = data.get("mensagem", "").strip()
+
+        mensagem = (
+            data.get("message", {}).get("text")
+            or data.get("mensagem")
+            or ""
+        ).strip()
 
         if not mensagem:
-            return jsonify({"resposta": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
+            return jsonify({"reply": "Não entendi sua mensagem. Por favor, envie o nome de um produto para consultar o preço."})
 
         resultado_bling = buscar_produto_bling(mensagem)
 
@@ -212,11 +217,11 @@ def whatsapp():
         else:
             resposta_final = "Produto não encontrado no sistema. Tente usar outro nome ou variação."
 
-        return jsonify({"resposta": resposta_final})
+        return jsonify({"reply": resposta_final})
 
     except Exception as e:
         print(f"[ERRO WHATSAPP] {str(e)}")
-        return jsonify({"resposta": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
+        return jsonify({"reply": "Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde."})
 
 if __name__ == "__main__":
     import sys
