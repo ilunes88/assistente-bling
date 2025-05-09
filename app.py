@@ -19,9 +19,11 @@ TOKEN_FILE = 'token.txt'
 # OpenAI
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
+
 @app.route('/')
 def home():
     return 'API da Assistente está online!'
+
 
 @app.route('/login')
 def login():
@@ -33,6 +35,7 @@ def login():
         f'&state={state}'
     )
     return redirect(auth_link)
+
 
 @app.route('/callback')
 def callback():
@@ -70,12 +73,14 @@ def callback():
     else:
         return 'Erro: access_token não retornado pelo Bling.', 400
 
+
 def carregar_token():
     try:
         with open(TOKEN_FILE, 'r') as f:
             return f.read().strip()
     except FileNotFoundError:
         return None
+
 
 def buscar_produto_bling(nome_produto):
     access_token = carregar_token()
@@ -84,10 +89,11 @@ def buscar_produto_bling(nome_produto):
 
     url = 'https://www.bling.com.br/Api/v3/produtos'
     headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'descricao': nome_produto}
+    params = {'filters': f'descricao[{nome_produto}]'}
 
     try:
         response = requests.get(url, headers=headers, params=params)
+        
         if response.status_code != 200:
             return f'Erro ao buscar produtos: {response.status_code} - {response.text}'
 
@@ -101,15 +107,12 @@ def buscar_produto_bling(nome_produto):
 
         for item in produtos:
             nome_item = item.get('nome', '')
-            similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
-            if similaridade < 0.4:
-                continue
+            resposta_formatada.append(f'{nome_item}')
 
-            descricao = nome_item
             preco_info = item.get('preco', {})
             preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
 
-            resposta_formatada.append(f'{descricao}')
+            resposta_formatada.append(f'- Preço: R$ {preco}')
 
             variacoes = item.get('variacoes', [])
             if variacoes:
@@ -118,8 +121,6 @@ def buscar_produto_bling(nome_produto):
                     preco_info_var = v.get('preco', {})
                     preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
                     resposta_formatada.append(f'- {nome_var} | R$ {preco_var}')
-            else:
-                resposta_formatada.append(f'- Preço: R$ {preco}')
 
         if not resposta_formatada:
             return 'Nenhum produto semelhante encontrado com esse nome.'
@@ -129,11 +130,14 @@ def buscar_produto_bling(nome_produto):
     except Exception as e:
         return f'Erro ao interpretar resposta do Bling: {str(e)}'
 
+
 @app.route('/buscar_produto_bling', methods=['POST'])
 def buscar_produto_openai():
     try:
         data = request.get_json()
-        nome_produto = data.get('nome_produto')
+        
+        # Ajuste para pegar o valor de 'buscaProduto' do BotConversa
+        nome_produto = data.get('buscaProduto')
         if not nome_produto:
             return jsonify({'erro': 'Nome do produto não informado.'}), 400
 
@@ -142,6 +146,7 @@ def buscar_produto_openai():
 
     except Exception as e:
         return jsonify({'erro': f'Erro ao buscar produto: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     import sys
