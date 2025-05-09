@@ -4,7 +4,6 @@ import os
 import base64
 import uuid
 from difflib import SequenceMatcher
-from openai import OpenAI
 
 app = Flask(__name__)
 
@@ -16,12 +15,11 @@ TOKEN_URL = 'https://www.bling.com.br/Api/v3/oauth/token'
 AUTH_URL = 'https://www.bling.com.br/Api/v3/oauth/authorize'
 TOKEN_FILE = 'token.txt'
 
-# OpenAI
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 @app.route('/')
 def home():
     return 'API da Assistente está online!'
+
 
 @app.route('/login')
 def login():
@@ -33,6 +31,7 @@ def login():
         f'&state={state}'
     )
     return redirect(auth_link)
+
 
 @app.route('/callback')
 def callback():
@@ -61,81 +60,6 @@ def callback():
 
     tokens = response.json()
     access_token = tokens.get('access_token')
+    refresh_token = tokens.get('refresh_token')
 
     if access_token:
-        with open(TOKEN_FILE, 'w') as f:
-            f.write(access_token)
-        return 'Autenticação concluída com sucesso! Token obtido.'
-    else:
-        return 'Erro: access_token não retornado pelo Bling.', 400
-
-
-def carregar_token():
-    try:
-        with open(TOKEN_FILE, 'r') as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return None
-
-
-def buscar_produto_bling(buscaProduto):
-    access_token = carregar_token()
-    if not access_token:
-        return 'Erro: Token não encontrado. Faça login em /login'
-
-    url = 'https://www.bling.com.br/Api/v3/produtos'
-    headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'filters': f'descricao[*{buscaProduto}*]'}
-
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        if response.status_code != 200:
-            return f'Erro ao buscar produtos: {response.status_code} - {response.text}'
-
-        data = response.json()
-        produtos = data.get('data', [])
-
-        if not produtos:
-            return 'Nenhum produto encontrado com esse nome.'
-
-        resposta_formatada = []
-
-        for item in produtos:
-            nome_item = item.get('nome', '')
-            similaridade = SequenceMatcher(None, buscaProduto.lower(), nome_item.lower()).ratio()
-
-            if similaridade >= 0.5:
-                preco_info = item.get('preco', {})
-                preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
-                resposta_formatada.append(f'{nome_item} - Preço: R$ {preco}')
-
-        if not resposta_formatada:
-            return 'Nenhum produto semelhante encontrado com esse nome.'
-
-        return '\n'.join(resposta_formatada)
-
-    except Exception as e:
-        return f'Erro ao interpretar resposta do Bling: {str(e)}'
-
-
-@app.route('/buscar_produto_bling', methods=['POST'])
-def buscar_produto_openai():
-    try:
-        data = request.get_json()
-        buscaProduto = data.get('buscaProduto')
-        if not buscaProduto:
-            return jsonify({'erro': 'Nome do produto não informado.'}), 400
-
-        resultado = buscar_produto_bling(buscaProduto)
-        return jsonify({'resultado': resultado})
-
-    except Exception as e:
-        return jsonify({'erro': f'Erro ao buscar produto: {str(e)}'}), 500
-
-if __name__ == '__main__':
-    import sys
-    if 'RENDER' in os.environ:
-        from waitress import serve
-        serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-    else:
-        app.run(debug=True)
