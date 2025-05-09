@@ -63,3 +63,92 @@ def callback():
     refresh_token = tokens.get('refresh_token')
 
     if access_token:
+        with open(TOKEN_FILE, 'w') as f:
+            f.write(access_token)
+        return 'Autenticação concluída com sucesso! Token obtido.'
+    else:
+        return 'Erro: access_token não retornado pelo Bling.', 400
+
+
+def carregar_token():
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+
+def buscar_produto_bling(buscaProduto):
+    access_token = carregar_token()
+    if not access_token:
+        return 'Erro: Token não encontrado. Faça login em /login'
+
+    url = 'https://www.bling.com.br/Api/v3/produtos'
+    headers = {'Authorization': f'Bearer {access_token}'}
+    params = {'descricao': buscaProduto}
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code != 200:
+            return f'Erro ao buscar produtos: {response.status_code} - {response.text}'
+
+        data = response.json()
+        produtos = data.get('data', [])
+
+        if not produtos:
+            return 'Nenhum produto encontrado com esse nome.'
+
+        resposta_formatada = ["🛒 *Produtos Encontrados:*"]
+
+        for idx, item in enumerate(produtos, 1):
+            nome_item = item.get('nome', '')
+            similaridade = SequenceMatcher(None, buscaProduto.lower(), nome_item.lower()).ratio()
+            if similaridade < 0.4:
+                continue
+
+            descricao = nome_item
+            preco_info = item.get('preco', {})
+            preco = preco_info.get('preco', '0.00') if isinstance(preco_info, dict) else preco_info
+
+            resposta_formatada.append(f"\n{idx}️⃣ *{descricao}*")
+            resposta_formatada.append(f"   💰 Preço: R$ {preco}")
+
+            variacoes = item.get('variacoes', [])
+            if variacoes:
+                for v in variacoes:
+                    nome_var = v.get('nome', 'Variação')
+                    preco_info_var = v.get('preco', {})
+                    preco_var = preco_info_var.get('preco', preco) if isinstance(preco_info_var, dict) else preco_info_var
+                    resposta_formatada.append(f"   🔸 {nome_var} | R$ {preco_var}")
+
+        if len(resposta_formatada) == 1:
+            return 'Nenhum produto semelhante encontrado com esse nome.'
+
+        return '\n'.join(resposta_formatada)
+
+    except Exception as e:
+        return f'Erro ao interpretar resposta do Bling: {str(e)}'
+
+
+@app.route('/buscar_produto_bling', methods=['POST'])
+def buscar_produto_openai():
+    try:
+        data = request.get_json()
+        buscaProduto = data.get('buscaProduto')
+        if not buscaProduto:
+            return jsonify({'erro': 'Nome do produto não informado.'}), 400
+
+        resultado = buscar_produto_bling(buscaProduto)
+        return jsonify({'resultado': resultado})
+
+    except Exception as e:
+        return jsonify({'erro': f'Erro ao buscar produto: {str(e)}'}), 500
+
+
+if __name__ == '__main__':
+    import sys
+    if 'RENDER' in os.environ:
+        from waitress import serve
+        serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    else:
+        app.run(debug=True)
