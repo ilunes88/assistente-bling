@@ -78,14 +78,14 @@ def carregar_token():
         return None
 
 
-def buscar_produto_bling(nome_produto):
+def buscar_produto_bling(buscaProduto):
     access_token = carregar_token()
     if not access_token:
         return 'Erro: Token não encontrado. Faça login em /login'
 
     url = 'https://www.bling.com.br/Api/v3/produtos'
     headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'filters': f'descricao[*{nome_produto}*]'}
+    params = {'filters': f'descricao[*{buscaProduto}*]'}
 
     try:
         response = requests.get(url, headers=headers, params=params)
@@ -102,7 +102,7 @@ def buscar_produto_bling(nome_produto):
 
         for item in produtos:
             nome_item = item.get('nome', '')
-            similaridade = SequenceMatcher(None, nome_produto.lower(), nome_item.lower()).ratio()
+            similaridade = SequenceMatcher(None, buscaProduto.lower(), nome_item.lower()).ratio()
 
             if similaridade >= 0.5:
                 preco_info = item.get('preco', {})
@@ -122,11 +122,11 @@ def buscar_produto_bling(nome_produto):
 def buscar_produto_openai():
     try:
         data = request.get_json()
-        nome_produto = data.get('nome_produto')
-        if not nome_produto:
+        buscaProduto = data.get('buscaProduto')
+        if not buscaProduto:
             return jsonify({'erro': 'Nome do produto não informado.'}), 400
 
-        resultado = buscar_produto_bling(nome_produto)
+        resultado = buscar_produto_bling(buscaProduto)
         return jsonify({'resultado': resultado})
 
     except Exception as e:
